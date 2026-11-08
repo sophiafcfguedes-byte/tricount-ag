@@ -1,5 +1,5 @@
 // Tricount — dividir despesas a dois (sem dependências externas)
-// Uso: TRICOUNT_PIN=1234 PORT=3099 TRICOUNT_DATA=~/racha-data node server.js
+// Uso: TRICOUNT_PIN=1234 PORT=3099 TRICOUNT_DATA=~/tricount-data node server.js
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
