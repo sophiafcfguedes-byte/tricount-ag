@@ -18,7 +18,30 @@ const SECRET_FILE = path.join(DATA_DIR, '.secret');
 if (!fs.existsSync(SECRET_FILE)) fs.writeFileSync(SECRET_FILE, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
 const SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
 
-const EMPTY = { pessoas: ['Sophia', 'Victória'], grupos: [], despesas: [] };
+const id = () => crypto.randomUUID().slice(0, 12);
+const EMPTY = { pessoas: ['Sophia', 'Victória'], grupos: [], despesas: [], parcelados: [] };
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const mesAtual = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7); // horário de Brasília
+const somaMes = (ym, k) => { const [y, m] = ym.split('-').map(Number), t = y * 12 + m - 1 + k; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
+const difMes = (a, b) => { const [y1, m1] = a.split('-').map(Number), [y2, m2] = b.split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1); };
+const repartir = (v, n, i) => { const c = Math.round(v * 100), base = Math.floor(c / n); return (i === 0 ? c - base * (n - 1) : base) / 100; };
+
+// cria o grupo do mês atual e lança as parcelas que caem em cada grupo mensal
+function garantirMeses(db) {
+  let mudou = false; const atual = mesAtual();
+  if (!db.grupos.some(g => g.mes === atual)) { db.grupos.push({ id: id(), nome: MESES[+atual.slice(5) - 1] + ' ' + atual.slice(0, 4), mes: atual, criado: Date.now() }); mudou = true; }
+  for (const pl of db.parcelados) {
+    for (const g of db.grupos.filter(g => g.mes)) {
+      const i = difMes(pl.mes, g.mes);
+      if (i < 0 || i >= pl.n || pl.feitas.includes(i)) continue;
+      const ult = new Date(+g.mes.slice(0, 4), +g.mes.slice(5), 0).getDate();
+      db.despesas.push({ id: id(), grupo: g.id, desc: `${pl.desc} (${i + 1}/${pl.n})`, valor: repartir(pl.valor, pl.n, i), pagou: pl.pagou, tipo: pl.tipo,
+        partes: Object.fromEntries(Object.entries(pl.partes).map(([k, v]) => [k, repartir(v, pl.n, i)])), data: `${g.mes}-${String(Math.min(pl.dia, ult)).padStart(2, '0')}`, compra: pl.id, criado: Date.now() + i });
+      pl.feitas.push(i); mudou = true;
+    }
+  }
+  return mudou;
+}
 function load() {
   try { return Object.assign(structuredClone(EMPTY), JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); }
   catch { return structuredClone(EMPTY); }
@@ -50,7 +73,6 @@ const blocked = ip => { const f = fails.get(ip); return f && f.n >= 5 && Date.no
 const fail = ip => { const f = fails.get(ip) || { n: 0, t: 0 }; f.n++; f.t = Date.now(); fails.set(ip, f); };
 
 // ---- utilidades ----
-const id = () => crypto.randomUUID().slice(0, 12);
 const num = v => Math.round((Number(String(v ?? '').replace(',', '.')) || 0) * 100) / 100;
 const txt = (v, n = 80) => String(v ?? '').trim().slice(0, n);
 function send(res, code, obj, headers = {}) {
@@ -106,9 +128,9 @@ const server = http.createServer(async (req, res) => {
       if (!validToken(cookie(req, 'tricount'))) return send(res, 401, { erro: 'login' });
       const db = load();
       const [, coll, rid] = p.split('/').filter(Boolean);
-      const ok = () => { save(db); send(res, 200, db); };
+      const ok = () => { garantirMeses(db); save(db); send(res, 200, db); };
 
-      if (coll === 'state' && req.method === 'GET') return send(res, 200, db);
+      if (coll === 'state' && req.method === 'GET') { if (garantirMeses(db)) save(db); return send(res, 200, db); }
 
       if (coll === 'pessoas' && req.method === 'PUT') {
         const b = await body(req);
@@ -129,6 +151,7 @@ const server = http.createServer(async (req, res) => {
       if (coll === 'despesas') {
         if (req.method === 'POST' && rid === 'excluir') { // exclusão em lote
           const b = await body(req); const ids = new Set(Array.isArray(b.ids) ? b.ids : []);
+          if (b.cancelarParcelas) { const compras = new Set(db.despesas.filter(d => ids.has(d.id) && d.compra).map(d => d.compra)); db.parcelados = db.parcelados.filter(p => !compras.has(p.id)); }
           db.despesas = db.despesas.filter(d => !ids.has(d.id)); return ok();
         }
         if (req.method === 'POST') {
@@ -136,20 +159,22 @@ const server = http.createServer(async (req, res) => {
           if (!d.desc || !d.valor) return send(res, 400, { erro: 'Preencha descrição e valor' });
           const n = Math.min(48, Math.max(1, parseInt(b.parcelas) || 1));
           if (n === 1) { db.despesas.push({ id: id(), ...d, criado: Date.now() }); return ok(); }
-          // parcelado: uma despesa por mês, centavos que sobram vão na 1ª parcela
-          const [y, m, dia] = d.data.split('-').map(Number), compra = id();
-          const reparte = v => { const base = Math.floor(Math.round(v * 100) / n); return i => (i === 0 ? Math.round(v * 100) - base * (n - 1) : base) / 100; };
-          const pv = reparte(d.valor), pp = Object.fromEntries(Object.entries(d.partes).map(([k, v]) => [k, reparte(v)]));
+          const g = db.grupos.find(x => x.id === d.grupo);
+          if (g?.mes) { // grupo mensal: a 1ª parcela entra neste mês, as outras aparecem mês a mês
+            db.parcelados.push({ id: id(), desc: d.desc, valor: d.valor, n, pagou: d.pagou, tipo: d.tipo, partes: d.partes, mes: g.mes, dia: +d.data.slice(8), feitas: [] });
+            return ok();
+          }
+          // grupo comum: lança todas as parcelas de uma vez, uma por mês
+          const compra = id(), ini = d.data.slice(0, 7), dia = +d.data.slice(8);
           for (let i = 0; i < n; i++) {
-            const mm = m - 1 + i, ano = y + Math.floor(mm / 12), mes = mm % 12 + 1, ult = new Date(ano, mes, 0).getDate();
-            const data = `${ano}-${String(mes).padStart(2, '0')}-${String(Math.min(dia, ult)).padStart(2, '0')}`;
-            db.despesas.push({ id: id(), ...d, desc: `${d.desc} (${i + 1}/${n})`, valor: pv(i), partes: Object.fromEntries(Object.entries(pp).map(([k, f]) => [k, f(i)])), data, compra, criado: Date.now() + i });
+            const ym = somaMes(ini, i), ult = new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate();
+            db.despesas.push({ id: id(), ...d, desc: `${d.desc} (${i + 1}/${n})`, valor: repartir(d.valor, n, i), partes: Object.fromEntries(Object.entries(d.partes).map(([k, v]) => [k, repartir(v, n, i)])), data: `${ym}-${String(Math.min(dia, ult)).padStart(2, '0')}`, compra, criado: Date.now() + i });
           }
           return ok();
         }
         const i = db.despesas.findIndex(x => x.id === rid); if (i < 0) return send(res, 404, { erro: 'Despesa não encontrada' });
         if (req.method === 'PUT') { const b = await body(req); const d = limparDespesa({ grupo: db.despesas[i].grupo, ...b }, db); db.despesas[i] = { ...db.despesas[i], ...d }; return ok(); }
-        if (req.method === 'DELETE') { db.despesas.splice(i, 1); return ok(); }
+        if (req.method === 'DELETE') { db.despesas.splice(i, 1); return ok(); } // (o app usa a exclusão em lote)
       }
       return send(res, 404, { erro: 'não encontrado' });
     }
