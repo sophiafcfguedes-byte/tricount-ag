@@ -147,7 +147,7 @@ function telaGrupo(){
       h+=grupos.map(([dia,ds])=>`<div class="day">${fmtDia(dia)}</div><div class="list">${ds.map(d=>{
         const reemb=d.tipo==='reembolso';const outro=Object.keys(d.partes)[0];
         const sub=reemb?`${esc(d.pagou)} pagou ${esc(outro)}`:`Pago por ${esc(d.pagou)}${d.tipo==='valores'||Object.keys(d.partes).length<2?' · '+Object.entries(d.partes).map(([p,v])=>esc(p)+' '+brl(v)).join(' / '):''}`;
-        return `<div class="item ${selecionando&&sel.has(d.id)?'on':''}" onclick="${selecionando?`tog('${d.id}')`:`formDespesa('${d.id}')`}">${selecionando?'<div class="ck"></div>':''}<div class="g"><b>${reemb?'↔︎ ':''}${esc(d.desc)}</b><span>${sub}</span></div><div class="v">${brl(d.valor)}</div></div>`}).join('')}</div>`).join('');
+        return `<div class="item ${selecionando&&sel.has(d.id)?'on':''}" onclick="${selecionando?`tog('${d.id}')`:`formDespesa('${d.id}')`}">${selecionando?'<div class="ck"></div>':''}<div class="g"><b>${reemb?'↔︎ ':''}${esc(d.desc)}${d.recorrente?' <span style="color:var(--muted);font-weight:600;font-size:12px">↻ recorrente</span>':''}</b><span>${sub}</span></div><div class="v">${brl(d.valor)}</div></div>`}).join('')}</div>`).join('');
     }
   }else{
     h+=`<div class="list">${S.pessoas.map(p=>`<div class="item" style="cursor:default"><div class="g"><b>${esc(p)}</b><span>Pagou ${brl(l.filter(d=>d.pagou===p).reduce((t,d)=>t+d.valor,0))}</span></div><div class="v ${s[p]>0.005?'pos':s[p]<-0.005?'neg':''}">${s[p]>0.005?'+':''}${brl(s[p])}</div></div>`).join('')}</div>`;
@@ -173,8 +173,8 @@ function toast(msg,desfazer){$('.toast')?.remove();const t=document.createElemen
   if(desfazer)t.querySelector('button').onclick=()=>{t.remove();desfazer()};document.body.appendChild(t);setTimeout(()=>t.remove(),5000)}
 
 function pedirExclusao(ids){ids=ids||[...sel];const n=ids.length;fechar();
-  const temParc=S.despesas.some(d=>ids.includes(d.id)&&d.compra&&S.parcelados?.some(p=>p.id===d.compra&&p.feitas.length<p.n));
-  folha(`<h2>Excluir ${n} despesa${n==1?'':'s'}?</h2>${temParc?`<label class="pill" style="display:flex;gap:10px;align-items:center;font-weight:600"><input type="checkbox" id="cancPar" checked style="width:22px;height:22px;accent-color:#16274A">Cancelar também as próximas parcelas</label>`:'<div class="hint">Você pode desfazer logo em seguida.</div>'}<div class="two"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn del" id="okDel">Excluir</button></div>`);
+  const temParc=S.despesas.some(d=>ids.includes(d.id)&&d.compra&&S.parcelados?.some(p=>p.id===d.compra&&(p.recorrente||p.feitas.length<p.n)));
+  folha(`<h2>Excluir ${n} despesa${n==1?'':'s'}?</h2>${temParc?`<label class="pill" style="display:flex;gap:10px;align-items:center;font-weight:600"><input type="checkbox" id="cancPar" checked style="width:22px;height:22px;accent-color:#16274A">Cancelar também os próximos meses</label>`:'<div class="hint">Você pode desfazer logo em seguida.</div>'}<div class="two"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn del" id="okDel">Excluir</button></div>`);
   $('#okDel').onclick=()=>excluir(ids,!!$('#cancPar')?.checked)}
 async function excluir(ids,cancelarParcelas){ids=ids||[...sel];const backup=S.despesas.filter(d=>ids.includes(d.id));fechar();sel=null;
   S=await api('despesas/excluir','POST',{ids,cancelarParcelas});render();
@@ -200,14 +200,14 @@ function formDespesa(id){
   <div class="f"><label>Quem pagou</label><div class="seg" id="segPagou"></div></div>
   <div class="f ${F.reemb?'hide':''}"><label>Dividir</label><div class="seg" id="segDiv"></div></div>
   <div class="two ${F.div==='valores'?'':'hide'}" id="boxValores">${S.pessoas.map((p,i)=>`<div class="f"><label>${esc(p)}</label><input id="pv${i}" inputmode="numeric" class="din" value="${d?.tipo==='valores'&&d.partes[p]?mascara(d.partes[p]):''}" placeholder="0,00"></div>`).join('')}</div>
-  ${d?'':`<div class="f"><label>Parcelas</label><select id="fpar" style="width:100%;padding:13px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-size:16px">${Array.from({length:24},(_,i)=>`<option value="${i+1}">${i?`${i+1}x`:'À vista'}</option>`).join('')}</select><div class="hint" id="parHint" style="margin-top:6px"></div></div>`}
+  ${d?'':`<div class="f"><label>Repetição</label><select id="fpar" style="width:100%;padding:13px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-size:16px">${S.grupos.find(g=>g.id===grupo)?.mes?'<option value="recorrente">Recorrente (todo mês)</option>':''}${Array.from({length:24},(_,i)=>`<option value="${i+1}" ${i?'':'selected'}>${i?`${i+1}x`:'À vista'}</option>`).join('')}</select><div class="hint" id="parHint" style="margin-top:6px"></div></div>`}
   <div class="f"><label>Data</label><input id="fdt" type="date" value="${d?.data||new Date().toISOString().slice(0,10)}"></div>
   <div class="err" id="ferr"></div>
   <button class="btn full" onclick="salvarDespesa()">Salvar</button>
   ${d?`<button class="btn del full" onclick="pedirExclusao(['${d.id}'])">Excluir</button>`:''}`);
   document.querySelectorAll('.din').forEach(el=>el.addEventListener('input',()=>{const c=el.value.replace(/\D/g,'').replace(/^0+/,'');el.value=c?mascara(+c/100):''}));
   pintarSeg();if(!d){setTimeout(()=>$('#fd').focus(),50);
-    const hint=()=>{const k=+$('#fpar').value;$('#lblValor').textContent=k>1?'Valor de cada parcela':'Valor';const v=F.div==='valores'?S.pessoas.reduce((t,p,i)=>t+n($('#pv'+i).value),0):n($('#fv').value);$('#parHint').textContent=k>1&&v?`${k}x de ${brl(v)} · total ${brl(v*k)}`+(S.grupos.find(g=>g.id===grupo)?.mes?' · as próximas entram sozinhas no grupo de cada mês':', uma por mês'):''};
+    const hint=()=>{const rec=$('#fpar').value==='recorrente',k=rec?1:+$('#fpar').value;$('#lblValor').textContent=k>1?'Valor de cada parcela':'Valor';const v=F.div==='valores'?S.pessoas.reduce((t,p,i)=>t+n($('#pv'+i).value),0):n($('#fv').value);$('#parHint').textContent=rec?'Entra sozinha no grupo de todo mês, até você cancelar':k>1&&v?`${k}x de ${brl(v)} · total ${brl(v*k)}`+(S.grupos.find(g=>g.id===grupo)?.mes?' · as próximas entram sozinhas no grupo de cada mês':', uma por mês'):''};
     ['#fpar','#fv','#pv0','#pv1'].forEach(s=>$(s)&&($(s).oninput=hint));}
 }
 function pintarSeg(){
@@ -220,7 +220,7 @@ const mascara=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFracti
 const n=v=>Number(String(v||'').replace(/\./g,'').replace(',','.'))||0;
 async function salvarDespesa(){
   const desc=$('#fd').value.trim(),valor=n($('#fv').value),data=$('#fdt').value;
-  let corpo={grupo,desc,valor,pagou:F.pagou,data,parcelas:$('#fpar')?+$('#fpar').value:1};
+  let corpo={grupo,desc,valor,pagou:F.pagou,data,parcelas:$('#fpar')?($('#fpar').value==='recorrente'?'recorrente':+$('#fpar').value):1};
   if(F.reemb){corpo.tipo='reembolso';corpo.partes={[S.pessoas.find(p=>p!==F.pagou)]:valor}}
   else if(F.div==='valores'){corpo.tipo='valores';corpo.partes={};S.pessoas.forEach((p,i)=>corpo.partes[p]=n($('#pv'+i).value))}
   else{corpo.tipo='igual';corpo.entre=F.div==='igual'?S.pessoas:[F.div.slice(3)]}

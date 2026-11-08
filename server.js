@@ -34,10 +34,10 @@ function garantirMeses(db) {
   for (const pl of db.parcelados) {
     for (const g of db.grupos.filter(g => g.mes)) {
       const i = difMes(pl.mes, g.mes);
-      if (i < 0 || i >= pl.n || pl.feitas.includes(i)) continue;
+      if (i < 0 || (!pl.recorrente && i >= pl.n) || pl.feitas.includes(i)) continue;
       const ult = new Date(+g.mes.slice(0, 4), +g.mes.slice(5), 0).getDate();
-      db.despesas.push({ id: id(), grupo: g.id, desc: `${pl.desc} (${i + 1}/${pl.n})`, valor: repartir(pl.valor, pl.n, i), pagou: pl.pagou, tipo: pl.tipo,
-        partes: Object.fromEntries(Object.entries(pl.partes).map(([k, v]) => [k, repartir(v, pl.n, i)])), data: `${g.mes}-${String(Math.min(pl.dia, ult)).padStart(2, '0')}`, compra: pl.id, criado: Date.now() + i });
+      db.despesas.push({ id: id(), grupo: g.id, desc: pl.recorrente ? pl.desc : `${pl.desc} (${i + 1}/${pl.n})`, valor: repartir(pl.valor, pl.n, i), pagou: pl.pagou, tipo: pl.tipo,
+        partes: Object.fromEntries(Object.entries(pl.partes).map(([k, v]) => [k, repartir(v, pl.n, i)])), data: `${g.mes}-${String(Math.min(pl.dia, ult)).padStart(2, '0')}`, compra: pl.id, recorrente: !!pl.recorrente, criado: Date.now() + i });
       pl.feitas.push(i); mudou = true;
     }
   }
@@ -158,6 +158,11 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'POST') {
           const b = await body(req); const d = limparDespesa(b, db);
           if (!d.desc || !d.valor) return send(res, 400, { erro: 'Preencha descrição e valor' });
+          const g0 = db.grupos.find(x => x.id === d.grupo);
+          if (b.parcelas === 'recorrente' && g0?.mes) { // fixa: entra todo mês até ser cancelada
+            db.parcelados.push({ id: id(), desc: d.desc, valor: d.valor, n: 0, recorrente: true, pagou: d.pagou, tipo: d.tipo, partes: d.partes, mes: g0.mes, dia: +d.data.slice(8), feitas: [] });
+            return ok();
+          }
           const n = Math.min(48, Math.max(1, parseInt(b.parcelas) || 1));
           if (n === 1) { db.despesas.push({ id: id(), ...d, criado: Date.now() }); return ok(); }
           const g = db.grupos.find(x => x.id === d.grupo);
