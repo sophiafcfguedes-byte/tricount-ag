@@ -106,12 +106,14 @@ async function entrar(){try{await api('login','POST',{pin:$('#pin').value});carr
 
 /* ---------- cálculos ---------- */
 const [A,B]=[()=>S.pessoas[0],()=>S.pessoas[1]];
+const EU=()=>S.pessoas[S.eu??0],OUTRA=()=>S.pessoas[1-(S.eu??0)];
+const meu=d=>(d.autor??0)===(S.eu??0);
 function despesasDe(gid){return S.despesas.filter(d=>d.grupo===gid).sort((a,b)=>b.data.localeCompare(a.data)||b.criado-a.criado)}
 function saldo(lista){const s={};S.pessoas.forEach(p=>s[p]=0);
   lista.forEach(d=>{s[d.pagou]=(s[d.pagou]||0)+d.valor;for(const[p,v]of Object.entries(d.partes))s[p]=(s[p]||0)-v});
   for(const p in s)s[p]=Math.round(s[p]*100)/100;return s}
-function frase(s){const a=A(),b=B(),v=s[a];if(Math.abs(v)<.01)return{txt:'Tudo acertado ✨',v:0};
-  return v>0?{txt:`<em>${esc(b)}</em> deve ${brl(v)} para <em>${esc(a)}</em>`,de:b,para:a,v}:{txt:`<em>${esc(a)}</em> deve ${brl(-v)} para <em>${esc(b)}</em>`,de:a,para:b,v:-v}}
+function frase(s){const eu=EU(),ela=OUTRA(),v=s[eu];if(Math.abs(v)<.01)return{txt:'Tudo acertado ✨',curto:'Tudo acertado',v:0};
+  return v>0?{txt:`<em>${esc(ela)}</em> te deve ${brl(v)}`,curto:`${ela} te deve ${brl(v)}`,de:ela,para:eu,v}:{txt:`Você deve ${brl(-v)} para <em>${esc(ela)}</em>`,curto:`Você deve ${brl(-v)} para ${ela}`,de:eu,para:ela,v:-v}}
 const gastoTotal=l=>l.filter(d=>d.tipo!=='reembolso').reduce((s,d)=>s+d.valor,0);
 
 /* ---------- telas ---------- */
@@ -123,8 +125,8 @@ function render(){
 function telaInicio(){
   const ord=(a,b)=>(b.mes||'0').localeCompare(a.mes||'0')||b.criado-a.criado;const ativos=S.grupos.filter(g=>!g.arquivado).sort(ord),arq=S.grupos.filter(g=>g.arquivado).sort(ord);
   const geral=frase(saldo(S.despesas));
-  const linha=g=>{const l=despesasDe(g.id),f=frase(saldo(l));return `<div class="item" onclick="abrir('${g.id}')"><div class="g"><b>${esc(g.nome)}</b><span>${f.v?f.txt.replace(/<\/?em>/g,''):'Tudo acertado'}</span></div><div class="v">${brl(gastoTotal(l))}<small>${l.length} despesa${l.length==1?'':'s'}</small></div></div>`};
-  $('#app').innerHTML=`<div class="top"><div class="mono">T</div><div class="t"><small>${esc(A())} & ${esc(B())}</small><h1>Tricount</h1></div><button class="icon-btn" onclick="ajustes()" aria-label="Ajustes">⚙︎</button></div>
+  const linha=g=>{const l=despesasDe(g.id),f=frase(saldo(l));return `<div class="item" onclick="abrir('${g.id}')"><div class="g"><b>${esc(g.nome)}</b><span>${f.curto}</span></div><div class="v">${brl(gastoTotal(l))}<small>${l.length} despesa${l.length==1?'':'s'}</small></div></div>`};
+  $('#app').innerHTML=`<div class="top"><div class="mono">T</div><div class="t"><small>Olá, ${esc(EU())}</small><h1>Tricount</h1></div><button class="icon-btn" onclick="ajustes()" aria-label="Ajustes">⚙︎</button></div>
   <div class="hero"><div class="lbl">Saldo geral</div><div class="big">${geral.txt}</div></div>
   ${ativos.length?`<div class="list">${ativos.map(linha).join('')}</div>`:'<div class="empty">Nenhum grupo ainda.<br>Crie um, tipo “Casa” ou “Viagem LA”.</div>'}
   ${arq.length?`<div class="day">Arquivados</div><div class="list">${arq.map(linha).join('')}</div>`:''}
@@ -136,18 +138,18 @@ function telaGrupo(){
   let h=`<div class="top"><button class="icon-btn" onclick="voltar()" aria-label="Voltar">‹</button><div class="t"><small>${l.length} despesa${l.length==1?'':'s'}</small><h1>${esc(g.nome)}</h1></div>
   ${l.length&&aba==='desp'?`<button class="txt-btn" onclick="modoSel()">${selecionando?'Cancelar':'Selecionar'}</button>`:''}
   ${!selecionando?`<button class="icon-btn" onclick="editarGrupo()" aria-label="Editar grupo">⋯</button>`:''}</div>
-  <div class="hero"><div class="big">${f.txt}</div><div class="row"><div><span>Total gasto</span><b>${brl(gastoTotal(l))}</b></div><div><span>${esc(A())}</span><b>${brl(minhas(A()))}</b></div><div><span>${esc(B())}</span><b>${brl(minhas(B()))}</b></div></div></div>
+  <div class="hero"><div class="big">${f.txt}</div><div class="row"><div><span>Total gasto</span><b>${brl(gastoTotal(l))}</b></div><div><span>Você</span><b>${brl(minhas(EU()))}</b></div><div><span>${esc(OUTRA())}</span><b>${brl(minhas(OUTRA()))}</b></div></div></div>
   <div class="tabs"><button class="${aba==='desp'?'on':''}" onclick="trocaAba('desp')">Despesas</button><button class="${aba==='saldo'?'on':''}" onclick="trocaAba('saldo')">Saldos</button></div>`;
   if(aba==='desp'){
     if(!l.length)h+='<div class="empty">Sem despesas ainda.</div>';
     else{
-      if(selecionando)h+=`<div class="list"><div class="item ${sel.size===l.length?'on':''}" onclick="selTodas()"><div class="ck"></div><div class="g"><b>Selecionar todas</b></div></div></div>`;
+      if(selecionando)h+=`<div class="list"><div class="item ${sel.size&&sel.size===l.filter(meu).length?'on':''}" onclick="selTodas()"><div class="ck"></div><div class="g"><b>Selecionar todas as minhas</b></div></div></div>`;
       let dia='';
       const grupos=[];l.forEach(d=>{if(d.data!==dia){dia=d.data;grupos.push([dia,[]])}grupos.at(-1)[1].push(d)});
       h+=grupos.map(([dia,ds])=>`<div class="day">${fmtDia(dia)}</div><div class="list">${ds.map(d=>{
         const reemb=d.tipo==='reembolso';const outro=Object.keys(d.partes)[0];
-        const sub=reemb?`${esc(d.pagou)} pagou ${esc(outro)}`:`Pago por ${esc(d.pagou)}${d.tipo==='valores'||Object.keys(d.partes).length<2?' · '+Object.entries(d.partes).map(([p,v])=>esc(p)+' '+brl(v)).join(' / '):''}`;
-        return `<div class="item ${selecionando&&sel.has(d.id)?'on':''}" onclick="${selecionando?`tog('${d.id}')`:`formDespesa('${d.id}')`}">${selecionando?'<div class="ck"></div>':''}<div class="g"><b>${reemb?'↔︎ ':''}${esc(d.desc)}${d.recorrente?' <span style="color:var(--muted);font-weight:600;font-size:12px">↻ recorrente</span>':''}</b><span>${sub}</span></div><div class="v">${brl(d.valor)}</div></div>`}).join('')}</div>`).join('');
+        const dela=!meu(d);const sub=(dela?`<span style="color:var(--gold);font-weight:700">🔒 ${esc(OUTRA())}</span> · `:'')+(reemb?`${esc(d.pagou)} pagou ${esc(outro)}`:`Pago por ${esc(d.pagou)}${d.tipo==='valores'||Object.keys(d.partes).length<2?' · '+Object.entries(d.partes).map(([p,v])=>esc(p)+' '+brl(v)).join(' / '):''}`);
+        return `<div class="item ${selecionando&&sel.has(d.id)?'on':''}" style="${selecionando&&dela?'opacity:.45':''}" onclick="${dela?`toast('Lançada por ${esc(OUTRA())}: só ela pode mudar')`:selecionando?`tog('${d.id}')`:`formDespesa('${d.id}')`}">${selecionando?(dela?'<div class="ck" style="visibility:hidden"></div>':'<div class="ck"></div>'):''}<div class="g"><b>${reemb?'↔︎ ':''}${esc(d.desc)}${d.recorrente?' <span style="color:var(--muted);font-weight:600;font-size:12px">↻ recorrente</span>':''}</b><span>${sub}</span></div><div class="v">${brl(d.valor)}</div></div>`}).join('')}</div>`).join('');
     }
   }else{
     h+=`<div class="list">${S.pessoas.map(p=>`<div class="item" style="cursor:default"><div class="g"><b>${esc(p)}</b><span>Pagou ${brl(l.filter(d=>d.pagou===p).reduce((t,d)=>t+d.valor,0))}</span></div><div class="v ${s[p]>0.005?'pos':s[p]<-0.005?'neg':''}">${s[p]>0.005?'+':''}${brl(s[p])}</div></div>`).join('')}</div>`;
@@ -164,7 +166,7 @@ function voltar(){grupo=null;sel=null;$('#layer').innerHTML='';render()}
 function trocaAba(a){aba=a;sel=null;render()}
 function modoSel(){sel=sel?null:new Set();render()}
 function tog(id){sel.has(id)?sel.delete(id):sel.add(id);render()}
-function selTodas(){const l=despesasDe(grupo);if(sel.size===l.length)sel.clear();else l.forEach(d=>sel.add(d.id));render()}
+function selTodas(){const l=despesasDe(grupo).filter(meu);if(sel.size===l.length)sel.clear();else l.forEach(d=>sel.add(d.id));render()}
 
 /* ---------- folhas ---------- */
 function folha(html){const o=document.createElement('div');o.className='ov';o.innerHTML=`<div class="sheet">${html}</div>`;o.onclick=e=>{if(e.target===o)fechar()};$('#layer').appendChild(o)}
@@ -187,13 +189,13 @@ function editarGrupo(){const g=S.grupos.find(x=>x.id===grupo);folha(`<h2>Grupo</
 async function renomear(){S=await api('grupos/'+grupo,'PUT',{nome:$('#gn').value});fechar();render()}
 async function arquivar(v){S=await api('grupos/'+grupo,'PUT',{arquivado:v});fechar();voltar()}
 function pedirExcluirGrupo(){fechar();folha(`<h2>Excluir o grupo e todas as despesas dele?</h2><div class="hint">Isso não pode ser desfeito.</div><div class="two"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn del" onclick="excluirGrupo()">Excluir</button></div>`)}
-async function excluirGrupo(){S=await api('grupos/'+grupo,'DELETE');fechar();voltar()}
+async function excluirGrupo(){try{S=await api('grupos/'+grupo,'DELETE');fechar();voltar()}catch(e){fechar();toast(e.message)}}
 
 let F={};
 function formDespesa(id){
   const d=id?S.despesas.find(x=>x.id===id):null;
-  const div=!d?'igual':d.tipo==='valores'?'valores':Object.keys(d.partes).length===1?'so:'+Object.keys(d.partes)[0]:'igual';
-  F={id,pagou:d?.pagou||A(),div,reemb:d?.tipo==='reembolso'};
+  const div=!d?'igual':Object.keys(d.partes).length===1?'so:'+Object.keys(d.partes)[0]:'igual';
+  F={id,pagou:d?.pagou||EU(),div,reemb:d?.tipo==='reembolso'};
   folha(`<h2>${d?'Editar despesa':'Nova despesa'}</h2>
   <div class="f"><label>Descrição</label><input id="fd" value="${esc(d?.desc||'')}" placeholder="Ex.: Mercado"></div>
   <div class="f" id="boxValor"><label id="lblValor">Valor</label><input id="fv" class="money din" inputmode="numeric" value="${d?mascara(d.valor):''}" placeholder="0,00"></div>
@@ -212,7 +214,7 @@ function formDespesa(id){
 }
 function pintarSeg(){
   $('#segPagou').innerHTML=S.pessoas.map(p=>`<button class="${F.pagou===p?'on':''}" onclick="F.pagou='${esc(p)}';pintarSeg()">${esc(p)}</button>`).join('');
-  const ops=[['igual','Meio a meio'],['so:'+A(),'Só '+A()],['so:'+B(),'Só '+B()],['valores','Valores']];
+  const ops=[['igual','Meio a meio'],['so:'+A(),'Só '+A()],['so:'+B(),'Só '+B()]];
   $('#segDiv').innerHTML=ops.map(([k,t])=>`<button class="${F.div===k?'on':''}" onclick="F.div='${esc(k)}';pintarSeg()">${esc(t)}</button>`).join('');
   $('#boxValores').classList.toggle('hide',F.div!=='valores');$('#boxValor').classList.toggle('hide',F.div==='valores');
 }

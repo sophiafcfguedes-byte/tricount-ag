@@ -1,17 +1,17 @@
 // Tricount — dividir despesas a dois (sem dependências externas)
-// Uso: TRICOUNT_PIN=1234 PORT=3099 TRICOUNT_DATA=~/tricount-data node server.js
+// Uso: TRICOUNT_PIN=1234 TRICOUNT_PIN_2=5678 PORT=3099 TRICOUNT_DATA=~/tricount-data node server.js
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT || 3099);
-const PIN = String(process.env.TRICOUNT_PIN || '');
+const PINS = [String(process.env.TRICOUNT_PIN || ''), String(process.env.TRICOUNT_PIN_2 || '')]; // [pessoa 1, pessoa 2]
 const DATA_DIR = process.env.TRICOUNT_DATA || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'tricount.json');
 const PUBLIC = path.join(__dirname, 'public');
 
-if (!PIN) { console.error('Defina TRICOUNT_PIN (ex.: TRICOUNT_PIN=123456 node server.js)'); process.exit(1); }
+if (!PINS[0]) { console.error('Defina TRICOUNT_PIN (ex.: TRICOUNT_PIN=123456 node server.js)'); process.exit(1); }
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const SECRET_FILE = path.join(DATA_DIR, '.secret');
@@ -37,7 +37,7 @@ function garantirMeses(db) {
       if (i < 0 || (!pl.recorrente && i >= pl.n) || pl.feitas.includes(i)) continue;
       const ult = new Date(+g.mes.slice(0, 4), +g.mes.slice(5), 0).getDate();
       db.despesas.push({ id: id(), grupo: g.id, desc: pl.recorrente ? pl.desc : `${pl.desc} (${i + 1}/${pl.n})`, valor: repartir(pl.valor, pl.n, i), pagou: pl.pagou, tipo: pl.tipo,
-        partes: Object.fromEntries(Object.entries(pl.partes).map(([k, v]) => [k, repartir(v, pl.n, i)])), data: `${g.mes}-${String(Math.min(pl.dia, ult)).padStart(2, '0')}`, compra: pl.id, recorrente: !!pl.recorrente, criado: Date.now() + i });
+        partes: Object.fromEntries(Object.entries(pl.partes).map(([k, v]) => [k, repartir(v, pl.n, i)])), data: `${g.mes}-${String(Math.min(pl.dia, ult)).padStart(2, '0')}`, autor: pl.autor ?? 0, compra: pl.id, recorrente: !!pl.recorrente, criado: Date.now() + i });
       pl.feitas.push(i); mudou = true;
     }
   }
@@ -57,13 +57,13 @@ function save(db) {
 
 // ---- sessão ----
 const sign = v => crypto.createHmac('sha256', SECRET).update(v).digest('hex');
-const makeToken = () => { const exp = String(Date.now() + 1000 * 60 * 60 * 24 * 90); return exp + '.' + sign(exp); };
-function validToken(t) {
-  if (!t) return false;
-  const [exp, sig] = t.split('.');
-  if (!exp || !sig || Number(exp) < Date.now()) return false;
-  const good = sign(exp);
-  return sig.length === good.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good));
+// sessão guarda quem é: 0 = pessoa 1 (Sophia), 1 = pessoa 2 (Victória)
+const makeToken = quem => { const v = quem + '.' + (Date.now() + 1000 * 60 * 60 * 24 * 90); return v + '.' + sign(v); };
+function quemDoToken(t) {
+  const [quem, exp, sig] = String(t || '').split('.');
+  if (!['0', '1'].includes(quem) || !exp || !sig || Number(exp) < Date.now()) return null;
+  const good = sign(quem + '.' + exp);
+  return sig.length === good.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good)) ? Number(quem) : null;
 }
 function cookie(req, name) {
   const m = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(name + '='));
@@ -119,19 +119,22 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/login' && req.method === 'POST') {
       if (blocked(ip)) return send(res, 429, { erro: 'Muitas tentativas. Espere 15 minutos.' });
       const b = await body(req);
-      if (String(b.pin || '') !== PIN) { fail(ip); return send(res, 401, { erro: 'PIN incorreto' }); }
+      const quem = PINS.findIndex(x => x && x === String(b.pin || ''));
+      if (quem < 0) { fail(ip); return send(res, 401, { erro: 'PIN incorreto' }); }
       fails.delete(ip);
-      return send(res, 200, { ok: true }, { 'Set-Cookie': `tricount=${makeToken()}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}` });
+      return send(res, 200, { ok: true }, { 'Set-Cookie': `tc=${makeToken(quem)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}` });
     }
-    if (p === '/api/logout') return send(res, 200, { ok: true }, { 'Set-Cookie': 'tricount=; Path=/; Max-Age=0' });
+    if (p === '/api/logout') return send(res, 200, { ok: true }, { 'Set-Cookie': 'tc=; Path=/; Max-Age=0' });
 
     if (p.startsWith('/api/')) {
-      if (!validToken(cookie(req, 'tricount'))) return send(res, 401, { erro: 'login' });
+      const eu = quemDoToken(cookie(req, 'tc'));
+      if (eu === null) return send(res, 401, { erro: 'login' });
+      const meu = d => (d.autor ?? 0) === eu; // despesas antigas, sem autor, são da pessoa 1
       const db = load();
       const [, coll, rid] = p.split('/').filter(Boolean);
-      const ok = () => { garantirMeses(db); save(db); send(res, 200, db); };
+      const ok = () => { garantirMeses(db); save(db); send(res, 200, { ...db, eu }); };
 
-      if (coll === 'state' && req.method === 'GET') { if (garantirMeses(db)) save(db); return send(res, 200, db); }
+      if (coll === 'state' && req.method === 'GET') { if (garantirMeses(db)) save(db); return send(res, 200, { ...db, eu }); }
 
       if (coll === 'pessoas' && req.method === 'PUT') {
         const b = await body(req);
@@ -146,12 +149,12 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'POST') { const b = await body(req); const nome = txt(b.nome, 40); if (!nome) return send(res, 400, { erro: 'Nome' }); db.grupos.push({ id: id(), nome, criado: Date.now() }); return ok(); }
         const g = db.grupos.find(x => x.id === rid); if (!g) return send(res, 404, { erro: 'Grupo não encontrado' });
         if (req.method === 'PUT') { const b = await body(req); g.nome = txt(b.nome, 40) || g.nome; if ('arquivado' in b) g.arquivado = !!b.arquivado; return ok(); }
-        if (req.method === 'DELETE') { db.grupos = db.grupos.filter(x => x.id !== rid); db.despesas = db.despesas.filter(d => d.grupo !== rid); return ok(); }
+        if (req.method === 'DELETE') { if (db.despesas.some(d => d.grupo === rid && !meu(d))) return send(res, 403, { erro: 'O grupo tem despesas da outra pessoa' }); db.grupos = db.grupos.filter(x => x.id !== rid); db.despesas = db.despesas.filter(d => d.grupo !== rid); return ok(); }
       }
 
       if (coll === 'despesas') {
         if (req.method === 'POST' && rid === 'excluir') { // exclusão em lote
-          const b = await body(req); const ids = new Set(Array.isArray(b.ids) ? b.ids : []);
+          const b = await body(req); const ids = new Set((Array.isArray(b.ids) ? b.ids : []).filter(x => db.despesas.some(d => d.id === x && meu(d))));
           if (b.cancelarParcelas) { const compras = new Set(db.despesas.filter(d => ids.has(d.id) && d.compra).map(d => d.compra)); db.parcelados = db.parcelados.filter(p => !compras.has(p.id)); }
           db.despesas = db.despesas.filter(d => !ids.has(d.id)); return ok();
         }
@@ -160,25 +163,26 @@ const server = http.createServer(async (req, res) => {
           if (!d.desc || !d.valor) return send(res, 400, { erro: 'Preencha descrição e valor' });
           const g0 = db.grupos.find(x => x.id === d.grupo);
           if (b.parcelas === 'recorrente' && g0?.mes) { // fixa: entra todo mês até ser cancelada
-            db.parcelados.push({ id: id(), desc: d.desc, valor: d.valor, n: 0, recorrente: true, pagou: d.pagou, tipo: d.tipo, partes: d.partes, mes: g0.mes, dia: +d.data.slice(8), feitas: [] });
+            db.parcelados.push({ id: id(), autor: eu, desc: d.desc, valor: d.valor, n: 0, recorrente: true, pagou: d.pagou, tipo: d.tipo, partes: d.partes, mes: g0.mes, dia: +d.data.slice(8), feitas: [] });
             return ok();
           }
           const n = Math.min(48, Math.max(1, parseInt(b.parcelas) || 1));
-          if (n === 1) { db.despesas.push({ id: id(), ...d, criado: Date.now() }); return ok(); }
+          if (n === 1) { db.despesas.push({ id: id(), autor: eu, ...d, criado: Date.now() }); return ok(); }
           const g = db.grupos.find(x => x.id === d.grupo);
           if (g?.mes) { // grupo mensal: a 1ª parcela entra neste mês, as outras aparecem mês a mês
-            db.parcelados.push({ id: id(), desc: d.desc, valor: d.valor, n, pagou: d.pagou, tipo: d.tipo, partes: d.partes, mes: g.mes, dia: +d.data.slice(8), feitas: [] });
+            db.parcelados.push({ id: id(), autor: eu, desc: d.desc, valor: d.valor, n, pagou: d.pagou, tipo: d.tipo, partes: d.partes, mes: g.mes, dia: +d.data.slice(8), feitas: [] });
             return ok();
           }
           // grupo comum: lança todas as parcelas de uma vez, uma por mês
           const compra = id(), ini = d.data.slice(0, 7), dia = +d.data.slice(8);
           for (let i = 0; i < n; i++) {
             const ym = somaMes(ini, i), ult = new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate();
-            db.despesas.push({ id: id(), ...d, desc: `${d.desc} (${i + 1}/${n})`, valor: repartir(d.valor, n, i), partes: Object.fromEntries(Object.entries(d.partes).map(([k, v]) => [k, repartir(v, n, i)])), data: `${ym}-${String(Math.min(dia, ult)).padStart(2, '0')}`, compra, criado: Date.now() + i });
+            db.despesas.push({ id: id(), autor: eu, ...d, desc: `${d.desc} (${i + 1}/${n})`, valor: repartir(d.valor, n, i), partes: Object.fromEntries(Object.entries(d.partes).map(([k, v]) => [k, repartir(v, n, i)])), data: `${ym}-${String(Math.min(dia, ult)).padStart(2, '0')}`, compra, criado: Date.now() + i });
           }
           return ok();
         }
         const i = db.despesas.findIndex(x => x.id === rid); if (i < 0) return send(res, 404, { erro: 'Despesa não encontrada' });
+        if (!meu(db.despesas[i])) return send(res, 403, { erro: 'Só quem lançou pode mudar essa despesa' });
         if (req.method === 'PUT') { const b = await body(req); const d = limparDespesa({ grupo: db.despesas[i].grupo, ...b }, db); db.despesas[i] = { ...db.despesas[i], ...d }; return ok(); }
         if (req.method === 'DELETE') { db.despesas.splice(i, 1); return ok(); } // (o app usa a exclusão em lote)
       }
