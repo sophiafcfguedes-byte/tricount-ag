@@ -1,24 +1,24 @@
-// Racha SG — dividir despesas a dois (sem dependências externas)
-// Uso: RACHA_PIN=1234 PORT=3099 RACHA_DATA=~/racha-data node server.js
+// Tricount — dividir despesas a dois (sem dependências externas)
+// Uso: TRICOUNT_PIN=1234 PORT=3099 TRICOUNT_DATA=~/racha-data node server.js
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT || 3099);
-const PIN = String(process.env.RACHA_PIN || '');
-const DATA_DIR = process.env.RACHA_DATA || path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'racha.json');
+const PIN = String(process.env.TRICOUNT_PIN || '');
+const DATA_DIR = process.env.TRICOUNT_DATA || path.join(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'tricount.json');
 const PUBLIC = path.join(__dirname, 'public');
 
-if (!PIN) { console.error('Defina RACHA_PIN (ex.: RACHA_PIN=123456 node server.js)'); process.exit(1); }
+if (!PIN) { console.error('Defina TRICOUNT_PIN (ex.: TRICOUNT_PIN=123456 node server.js)'); process.exit(1); }
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const SECRET_FILE = path.join(DATA_DIR, '.secret');
 if (!fs.existsSync(SECRET_FILE)) fs.writeFileSync(SECRET_FILE, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
 const SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
 
-const EMPTY = { pessoas: ['Sophia', 'Namorada'], grupos: [], despesas: [] };
+const EMPTY = { pessoas: ['Sophia', 'Victória'], grupos: [], despesas: [] };
 function load() {
   try { return Object.assign(structuredClone(EMPTY), JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); }
   catch { return structuredClone(EMPTY); }
@@ -98,12 +98,12 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req);
       if (String(b.pin || '') !== PIN) { fail(ip); return send(res, 401, { erro: 'PIN incorreto' }); }
       fails.delete(ip);
-      return send(res, 200, { ok: true }, { 'Set-Cookie': `racha=${makeToken()}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}` });
+      return send(res, 200, { ok: true }, { 'Set-Cookie': `tricount=${makeToken()}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}` });
     }
-    if (p === '/api/logout') return send(res, 200, { ok: true }, { 'Set-Cookie': 'racha=; Path=/; Max-Age=0' });
+    if (p === '/api/logout') return send(res, 200, { ok: true }, { 'Set-Cookie': 'tricount=; Path=/; Max-Age=0' });
 
     if (p.startsWith('/api/')) {
-      if (!validToken(cookie(req, 'racha'))) return send(res, 401, { erro: 'login' });
+      if (!validToken(cookie(req, 'tricount'))) return send(res, 401, { erro: 'login' });
       const db = load();
       const [, coll, rid] = p.split('/').filter(Boolean);
       const ok = () => { save(db); send(res, 200, db); };
@@ -146,4 +146,4 @@ const server = http.createServer(async (req, res) => {
     fs.createReadStream(f).pipe(res);
   } catch (e) { console.error(e); send(res, 500, { erro: 'Erro no servidor' }); }
 });
-server.listen(PORT, () => console.log(`Racha SG rodando na porta ${PORT}`));
+server.listen(PORT, () => console.log(`Tricount rodando na porta ${PORT}`));

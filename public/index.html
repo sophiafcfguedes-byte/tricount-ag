@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Racha SG</title>
+<title>Tricount</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Racha">
+<meta name="apple-mobile-web-app-title" content="Tricount">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#F6F3EC" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0B1220" media="(prefers-color-scheme: dark)">
@@ -26,7 +26,7 @@ button,input,select{font:inherit;color:inherit}
 .top .t{flex:1;min-width:0}.top small{display:block;color:var(--muted);font-size:13px}
 .top h1{margin:0;font-size:22px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mono{width:44px;height:44px;flex:none;border-radius:12px;background:#16274A;border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;font-size:22px;letter-spacing:-5px;color:#D6B370}
-.mono b{color:#F6F3EC;font-weight:600}
+.mono b{color:#F6F3EC;font-weight:600}.mono{letter-spacing:0}
 .icon-btn{width:44px;height:44px;flex:none;border-radius:22px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .txt-btn{border:1px solid var(--border);background:var(--card);border-radius:22px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer}
 .hero{background:var(--hero);color:#fff;border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:12px}
@@ -99,7 +99,7 @@ async function api(path,method='GET',data){
 async function carregar(){try{S=await api('state');render()}catch(e){}}
 
 /* ---------- login ---------- */
-function telaLogin(){$('#layer').innerHTML='';$('#app').innerHTML=`<div class="login"><div class="mono">S<b>G</b></div><b style="font-size:20px">Racha</b>
+function telaLogin(){$('#layer').innerHTML='';$('#app').innerHTML=`<div class="login"><div class="mono">T</div><b style="font-size:20px">Tricount</b>
 <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN"><div class="err" id="err"></div><button class="btn" onclick="entrar()">Entrar</button></div>`;
   $('#pin').onkeydown=e=>e.key==='Enter'&&entrar();setTimeout(()=>$('#pin').focus(),50)}
 async function entrar(){try{await api('login','POST',{pin:$('#pin').value});carregar()}catch(e){$('#err').textContent=e.message}}
@@ -124,7 +124,7 @@ function telaInicio(){
   const ativos=S.grupos.filter(g=>!g.arquivado),arq=S.grupos.filter(g=>g.arquivado);
   const geral=frase(saldo(S.despesas));
   const linha=g=>{const l=despesasDe(g.id),f=frase(saldo(l));return `<div class="item" onclick="abrir('${g.id}')"><div class="g"><b>${esc(g.nome)}</b><span>${f.v?f.txt.replace(/<\/?em>/g,''):'Tudo acertado'}</span></div><div class="v">${brl(gastoTotal(l))}<small>${l.length} despesa${l.length==1?'':'s'}</small></div></div>`};
-  $('#app').innerHTML=`<div class="top"><div class="mono">S<b>G</b></div><div class="t"><small>${esc(A())} & ${esc(B())}</small><h1>Racha</h1></div><button class="icon-btn" onclick="ajustes()" aria-label="Ajustes">⚙︎</button></div>
+  $('#app').innerHTML=`<div class="top"><div class="mono">T</div><div class="t"><small>${esc(A())} & ${esc(B())}</small><h1>Tricount</h1></div><button class="icon-btn" onclick="ajustes()" aria-label="Ajustes">⚙︎</button></div>
   <div class="hero"><div class="lbl">Saldo geral</div><div class="big">${geral.txt}</div></div>
   ${ativos.length?`<div class="list">${ativos.map(linha).join('')}</div>`:'<div class="empty">Nenhum grupo ainda.<br>Crie um, tipo “Casa” ou “Viagem LA”.</div>'}
   ${arq.length?`<div class="day">Arquivados</div><div class="list">${arq.map(linha).join('')}</div>`:''}

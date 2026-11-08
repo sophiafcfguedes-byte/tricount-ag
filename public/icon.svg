@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#16274A"/>
   <rect x="56" y="56" width="400" height="400" rx="84" fill="none" stroke="#C9A45C" stroke-width="4"/>
-  <circle cx="206" cy="256" r="98" fill="none" stroke="#D6B370" stroke-width="22"/>
-  <circle cx="306" cy="256" r="98" fill="none" stroke="#F6F3EC" stroke-opacity="0.92" stroke-width="22"/>
+  <text x="256" y="362" text-anchor="middle" font-family="Cormorant Garamond, Garamond, 'Times New Roman', serif" font-style="italic" font-weight="500" font-size="320" fill="#D6B370">T</text>
 </svg>
