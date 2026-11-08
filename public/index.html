@@ -69,7 +69,7 @@ button,input,select{font:inherit;color:inherit}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;background:var(--card);border-radius:18px}
 .login{min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
 .login .mono{width:84px;height:84px;font-size:44px;border-radius:22px;letter-spacing:-9px}
-.login input{width:220px;text-align:center;font-size:24px;letter-spacing:8px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card)}
+.login input{width:220px;text-align:center;font-size:24px;padding:12px;-webkit-text-security:disc;border:1px solid var(--border);border-radius:14px;background:var(--card)}
 .err{color:var(--bad);font-size:14px;min-height:20px}
 .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#16274A;color:#F6F3EC;padding:12px 18px;border-radius:14px;font-weight:700;z-index:30;display:flex;gap:14px;align-items:center;white-space:nowrap}
 .toast button{background:none;border:0;color:#D6B370;font-weight:800;cursor:pointer}
@@ -100,7 +100,7 @@ async function carregar(){try{S=await api('state');render()}catch(e){}}
 
 /* ---------- login ---------- */
 function telaLogin(){$('#layer').innerHTML='';$('#app').innerHTML=`<div class="login"><div class="mono">T</div><b style="font-size:20px">Tricount</b>
-<input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN"><div class="err" id="err"></div><button class="btn" onclick="entrar()">Entrar</button></div>`;
+<input id="pin" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="PIN"><div class="err" id="err"></div><button class="btn" onclick="entrar()">Entrar</button></div>`;
   $('#pin').onkeydown=e=>e.key==='Enter'&&entrar();setTimeout(()=>$('#pin').focus(),50)}
 async function entrar(){try{await api('login','POST',{pin:$('#pin').value});carregar()}catch(e){$('#err').textContent=e.message}}
 
