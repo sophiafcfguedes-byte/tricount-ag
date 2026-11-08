@@ -131,7 +131,22 @@ const server = http.createServer(async (req, res) => {
           const b = await body(req); const ids = new Set(Array.isArray(b.ids) ? b.ids : []);
           db.despesas = db.despesas.filter(d => !ids.has(d.id)); return ok();
         }
-        if (req.method === 'POST') { const b = await body(req); const d = limparDespesa(b, db); if (!d.desc || !d.valor) return send(res, 400, { erro: 'Preencha descrição e valor' }); db.despesas.push({ id: id(), ...d, criado: Date.now() }); return ok(); }
+        if (req.method === 'POST') {
+          const b = await body(req); const d = limparDespesa(b, db);
+          if (!d.desc || !d.valor) return send(res, 400, { erro: 'Preencha descrição e valor' });
+          const n = Math.min(48, Math.max(1, parseInt(b.parcelas) || 1));
+          if (n === 1) { db.despesas.push({ id: id(), ...d, criado: Date.now() }); return ok(); }
+          // parcelado: uma despesa por mês, centavos que sobram vão na 1ª parcela
+          const [y, m, dia] = d.data.split('-').map(Number), compra = id();
+          const reparte = v => { const base = Math.floor(Math.round(v * 100) / n); return i => (i === 0 ? Math.round(v * 100) - base * (n - 1) : base) / 100; };
+          const pv = reparte(d.valor), pp = Object.fromEntries(Object.entries(d.partes).map(([k, v]) => [k, reparte(v)]));
+          for (let i = 0; i < n; i++) {
+            const mm = m - 1 + i, ano = y + Math.floor(mm / 12), mes = mm % 12 + 1, ult = new Date(ano, mes, 0).getDate();
+            const data = `${ano}-${String(mes).padStart(2, '0')}-${String(Math.min(dia, ult)).padStart(2, '0')}`;
+            db.despesas.push({ id: id(), ...d, desc: `${d.desc} (${i + 1}/${n})`, valor: pv(i), partes: Object.fromEntries(Object.entries(pp).map(([k, f]) => [k, f(i)])), data, compra, criado: Date.now() + i });
+          }
+          return ok();
+        }
         const i = db.despesas.findIndex(x => x.id === rid); if (i < 0) return send(res, 404, { erro: 'Despesa não encontrada' });
         if (req.method === 'PUT') { const b = await body(req); const d = limparDespesa({ grupo: db.despesas[i].grupo, ...b }, db); db.despesas[i] = { ...db.despesas[i], ...d }; return ok(); }
         if (req.method === 'DELETE') { db.despesas.splice(i, 1); return ok(); }
