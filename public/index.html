@@ -101,7 +101,7 @@ async function carregar(){try{S=await api('state');render()}catch(e){}}
 /* ---------- login ---------- */
 function telaLogin(){$('#layer').innerHTML='';$('#app').innerHTML=`<div class="login"><div class="mono">T</div><b style="font-size:20px">Tricount</b>
 <input id="pin" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="PIN"><div class="err" id="err"></div><button class="btn" onclick="entrar()">Entrar</button></div>`;
-  $('#pin').onkeydown=e=>e.key==='Enter'&&entrar();setTimeout(()=>$('#pin').focus(),50)}
+  $('#pin').onkeydown=e=>{if(e.key==='Enter')entrar()};setTimeout(()=>$('#pin').focus(),50)}
 async function entrar(){try{await api('login','POST',{pin:$('#pin').value});carregar()}catch(e){$('#err').textContent=e.message}}
 
 /* ---------- cálculos ---------- */
