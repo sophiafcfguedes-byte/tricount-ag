@@ -196,7 +196,7 @@ function formDespesa(id){
   F={id,pagou:d?.pagou||A(),div,reemb:d?.tipo==='reembolso'};
   folha(`<h2>${d?'Editar despesa':'Nova despesa'}</h2>
   <div class="f"><label>Descrição</label><input id="fd" value="${esc(d?.desc||'')}" placeholder="Ex.: Mercado"></div>
-  <div class="f" id="boxValor"><label>Valor</label><input id="fv" class="money din" inputmode="numeric" value="${d?mascara(d.valor):''}" placeholder="0,00"></div>
+  <div class="f" id="boxValor"><label id="lblValor">Valor</label><input id="fv" class="money din" inputmode="numeric" value="${d?mascara(d.valor):''}" placeholder="0,00"></div>
   <div class="f"><label>Quem pagou</label><div class="seg" id="segPagou"></div></div>
   <div class="f ${F.reemb?'hide':''}"><label>Dividir</label><div class="seg" id="segDiv"></div></div>
   <div class="two ${F.div==='valores'?'':'hide'}" id="boxValores">${S.pessoas.map((p,i)=>`<div class="f"><label>${esc(p)}</label><input id="pv${i}" inputmode="numeric" class="din" value="${d?.tipo==='valores'&&d.partes[p]?mascara(d.partes[p]):''}" placeholder="0,00"></div>`).join('')}</div>
@@ -207,7 +207,7 @@ function formDespesa(id){
   ${d?`<button class="btn del full" onclick="pedirExclusao(['${d.id}'])">Excluir</button>`:''}`);
   document.querySelectorAll('.din').forEach(el=>el.addEventListener('input',()=>{const c=el.value.replace(/\D/g,'').replace(/^0+/,'');el.value=c?mascara(+c/100):''}));
   pintarSeg();if(!d){setTimeout(()=>$('#fd').focus(),50);
-    const hint=()=>{const k=+$('#fpar').value,v=F.div==='valores'?S.pessoas.reduce((t,p,i)=>t+n($('#pv'+i).value),0):n($('#fv').value);$('#parHint').textContent=k>1&&v?`${k}x de ${brl(v/k)}`+(S.grupos.find(g=>g.id===grupo)?.mes?' · as próximas entram sozinhas no grupo de cada mês':', uma por mês'):''};
+    const hint=()=>{const k=+$('#fpar').value;$('#lblValor').textContent=k>1?'Valor de cada parcela':'Valor';const v=F.div==='valores'?S.pessoas.reduce((t,p,i)=>t+n($('#pv'+i).value),0):n($('#fv').value);$('#parHint').textContent=k>1&&v?`${k}x de ${brl(v)} · total ${brl(v*k)}`+(S.grupos.find(g=>g.id===grupo)?.mes?' · as próximas entram sozinhas no grupo de cada mês':', uma por mês'):''};
     ['#fpar','#fv','#pv0','#pv1'].forEach(s=>$(s)&&($(s).oninput=hint));}
 }
 function pintarSeg(){

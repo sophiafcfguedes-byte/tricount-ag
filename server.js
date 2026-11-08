@@ -24,7 +24,8 @@ const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julh
 const mesAtual = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7); // horário de Brasília
 const somaMes = (ym, k) => { const [y, m] = ym.split('-').map(Number), t = y * 12 + m - 1 + k; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; };
 const difMes = (a, b) => { const [y1, m1] = a.split('-').map(Number), [y2, m2] = b.split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1); };
-const repartir = (v, n, i) => { const c = Math.round(v * 100), base = Math.floor(c / n); return (i === 0 ? c - base * (n - 1) : base) / 100; };
+// o valor digitado já é o valor de cada parcela (todo mês entra o mesmo valor)
+const repartir = v => v;
 
 // cria o grupo do mês atual e lança as parcelas que caem em cada grupo mensal
 function garantirMeses(db) {
