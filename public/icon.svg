@@ -1,5 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#16274A"/>
-  <rect x="56" y="56" width="400" height="400" rx="84" fill="none" stroke="#C9A45C" stroke-width="4"/>
-  <text x="256" y="362" text-anchor="middle" font-family="Cormorant Garamond, Garamond, 'Times New Roman', serif" font-style="italic" font-weight="500" font-size="320" fill="#D6B370">T</text>
+  <rect width="512" height="512" fill="#FFFFFF"/>
+  <path d="M136 132H376V196H292V384H220V196H136Z" fill="#111111"/>
 </svg>
