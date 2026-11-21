@@ -31,6 +31,17 @@ const repartir = v => v;
 function garantirMeses(db) {
   let mudou = false; const atual = mesAtual();
   if (!db.grupos.some(g => g.mes === atual)) { db.grupos.push({ id: id(), nome: MESES[+atual.slice(5) - 1] + ' ' + atual.slice(0, 4), mes: atual, criado: Date.now() }); mudou = true; }
+  // despesa digitada à mão com "(x/y)" no nome num grupo mensal vira parcelamento: as próximas parcelas seguem mês a mês
+  for (const d of db.despesas) {
+    if (d.compra || d.tipo === 'reembolso') continue;
+    const g = db.grupos.find(x => x.id === d.grupo && x.mes);
+    const m = g && String(d.desc).match(/^(.*?)\s*\(\s*(\d+)\s*\/\s*(\d+)\s*\)\s*$/);
+    if (!m) continue;
+    const x = +m[2], n = +m[3];
+    if (!(x >= 1 && x <= n && n <= 120)) continue;
+    const pl = { id: id(), autor: d.autor ?? 0, desc: m[1].trim() || d.desc, valor: d.valor, n, pagou: d.pagou, tipo: d.tipo, partes: d.partes, mes: somaMes(g.mes, -(x - 1)), dia: +d.data.slice(8), feitas: [x - 1] };
+    db.parcelados.push(pl); d.compra = pl.id; mudou = true;
+  }
   for (const pl of db.parcelados) {
     for (const g of db.grupos.filter(g => g.mes)) {
       const i = difMes(pl.mes, g.mes);
